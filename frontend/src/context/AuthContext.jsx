@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import AuthService from '../services/authService';
 
 const AuthContext = createContext();
 
@@ -12,37 +12,30 @@ export const AuthProvider = ({ children }) => {
 
   // Vérifier si l'utilisateur est déjà connecté au chargement
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const bypassAuth = localStorage.getItem('authBypass');
-    
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      checkUserSession();
-    } else if (bypassAuth === 'true') {
-      // Si bypass d'authentification est activé - simuler un utilisateur standard
-      setCurrentUser({ 
-        name: 'Utilisateur Test',
-        role: 'user'
-      });
+    const checkAuth = async () => {
+      if (AuthService.isAuthenticated()) {
+        try {
+          // Si en mode bypass, créer un utilisateur fictif
+          if (localStorage.getItem('authBypass') === 'true') {
+            setCurrentUser({
+              name: 'Utilisateur Test',
+              role: localStorage.getItem('userRole') || 'user'
+            });
+          } else {
+            // Sinon, essayer de récupérer le profil de l'utilisateur
+            const response = await AuthService.getProfile();
+            setCurrentUser(response.user);
+          }
+        } catch (err) {
+          console.error('Erreur de session:', err);
+          AuthService.logout();
+        }
+      }
       setLoading(false);
-    } else {
-      setLoading(false);
-    }
-  }, []);
+    };
 
-  // Vérifier la session utilisateur
-  const checkUserSession = async () => {
-    try {
-      const response = await axios.get('http://localhost:5000/api/auth/me');
-      console.log('Session check response:', response.data);
-      setCurrentUser(response.data.user);
-      setLoading(false);
-    } catch (error) {
-      console.error('Session error:', error);
-      logout();
-      setLoading(false);
-    }
-  };
+    checkAuth();
+  }, []);
 
   // Connexion
   const login = async (username, password) => {
@@ -50,22 +43,8 @@ export const AuthProvider = ({ children }) => {
       setError(null);
       console.log('Tentative de connexion avec:', { username, password });
       
-      const response = await axios.post('http://localhost:5000/api/auth/login', {
-        name: username,
-        password
-      });
-      
-      console.log('Réponse de connexion:', response.data);
-      
-      const { user, token } = response.data;
-      
-      // Sauvegarder le token
-      localStorage.setItem('token', token);
-      
-      // Configurer Axios pour utiliser le token
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      
-      setCurrentUser(user);
+      const response = await AuthService.login(username, password);
+      setCurrentUser(response.user);
       return true;
     } catch (error) {
       console.error('Erreur de connexion:', error);
@@ -90,9 +69,7 @@ export const AuthProvider = ({ children }) => {
 
   // Déconnexion
   const logout = () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('authBypass');
-    delete axios.defaults.headers.common['Authorization'];
+    AuthService.logout();
     setCurrentUser(null);
   };
 

@@ -13,35 +13,30 @@ import {
   FormControlLabel,
   Radio,
   Typography,
-  Paper
+  Paper,
+  Chip
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import PauseIcon from '@mui/icons-material/Pause';
 
-const PauseButton = () => {
-  const [isPaused, setIsPaused] = useState(false);
+const PauseButton = ({ isPaused, onPauseStart, onPauseEnd }) => {
   const [openDialog, setOpenDialog] = useState(false);
   const [pauseReason, setPauseReason] = useState('');
   const [pauseCategory, setPauseCategory] = useState('equipment');
 
   const handlePauseClick = () => {
     if (!isPaused) {
-      // Démarrer la pause
+      // Ouvrir le dialogue pour démarrer une pause
       setOpenDialog(true);
     } else {
-      // Reprendre la production
-      setIsPaused(false);
-      
-      // En production réelle, envoyez les données de la pause au backend
-      console.log('Production reprise. Raison de la pause:', pauseReason);
-      
-      // Réinitialiser
-      setPauseReason('');
+      // Terminer la pause en cours
+      onPauseEnd();
     }
   };
 
   const handleDialogConfirm = () => {
-    setIsPaused(true);
+    // Démarrer la pause avec la raison et la catégorie
+    onPauseStart(pauseReason, pauseCategory);
     setOpenDialog(false);
   };
 
@@ -56,7 +51,8 @@ const PauseButton = () => {
         p: 3, 
         mb: 3, 
         bgcolor: isPaused ? '#FFF4F4' : 'white',
-        border: isPaused ? '1px solid #FFCCCC' : 'none'
+        border: isPaused ? '1px solid #FFCCCC' : 'none',
+        position: 'relative'
       }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -77,7 +73,7 @@ const PauseButton = () => {
         
         {isPaused && (
           <Typography variant="body2" color="error" sx={{ mt: 1 }}>
-            Raison de la pause: {pauseReason || "Non spécifiée"}
+            La production est actuellement en pause. Cliquez sur "Reprendre la production" pour continuer.
           </Typography>
         )}
       </Box>
@@ -120,6 +116,26 @@ const PauseButton = () => {
           </Button>
         </DialogActions>
       </Dialog>
+      
+      {isPaused && (
+        <Chip 
+          label="PRODUCTION EN PAUSE" 
+          color="error" 
+          icon={<PauseIcon />} 
+          sx={{ 
+            position: 'absolute', 
+            top: -15, 
+            right: 20, 
+            fontWeight: 'bold',
+            animation: 'pulse 1.5s infinite',
+            '@keyframes pulse': {
+              '0%': { opacity: 1 },
+              '50%': { opacity: 0.6 },
+              '100%': { opacity: 1 },
+            },
+          }} 
+        />
+      )}
     </Paper>
   );
 };

@@ -1,3 +1,4 @@
+import React, { useState, useEffect } from 'react';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -53,9 +54,16 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   
-  // Modifié pour inclure bypassAuth et bypassAuthAsAdmin
-  const { login, bypassAuth, bypassAuthAsAdmin } = useAuth();
+  // Utiliser le contexte d'authentification
+  const { login, bypassAuth, bypassAuthAsAdmin, error } = useAuth();
   const navigate = useNavigate();
+
+  // Utiliser l'erreur du contexte si disponible
+  useEffect(() => {
+    if (error) {
+      setErrorMessage(error);
+    }
+  }, [error]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -90,7 +98,7 @@ const Login = () => {
   // Fonction pour contourner l'authentification en tant qu'admin
   const handleDevBypassAdmin = () => {
     bypassAuthAsAdmin();
-    navigate('/dashboard'); // Modifié pour rediriger vers le tableau de bord
+    navigate('/dashboard');
   };
 
   return (
