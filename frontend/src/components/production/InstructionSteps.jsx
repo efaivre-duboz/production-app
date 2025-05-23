@@ -8,392 +8,274 @@ import {
   StepLabel,
   StepContent,
   Button,
-  Card,
-  CardContent,
+  Checkbox,
+  FormControlLabel,
   List,
   ListItem,
   ListItemText,
-  ListItemIcon,
-  Checkbox,
   LinearProgress,
-  Alert,
   Chip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField
+  Alert
 } from '@mui/material';
-import {
-  PlayArrow as PlayArrowIcon,
-  Pause as PauseIcon,
-  Check as CheckIcon,
-  Schedule as ScheduleIcon,
-  Warning as WarningIcon,
-  CheckCircle as CheckCircleIcon
-} from '@mui/icons-material';
+import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 
-const InstructionSteps = ({ instructions, onComplete }) => {
+const InstructionSteps = ({ instructions, onComplete, completed = false }) => {
   const [activeStep, setActiveStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState(new Set());
-  const [stepTimers, setStepTimers] = useState({});
-  const [stepNotes, setStepNotes] = useState({});
-  const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-  const [currentNoteStep, setCurrentNoteStep] = useState(null);
-  const [tempNote, setTempNote] = useState('');
+  const [stepStartTime, setStepStartTime] = useState(null);
+  const [stepDurations, setStepDurations] = useState({});
 
-  // Transformer les instructions pour le format attendu
-  const steps = instructions.map((instruction, index) => ({
-    id: index,
-    title: instruction.title,
-    duration: instruction.duration || 0,
-    instructions: Array.isArray(instruction.steps) ? instruction.steps : 
-                  typeof instruction.instructions === 'string' ? 
-                  instruction.instructions.split('. ').filter(s => s.trim()) : 
-                  [instruction.instructions || ''],
-    note: instruction.note || ''
-  }));
-
+  // Charger l'état sauvegardé au montage
   useEffect(() => {
-    // Initialiser les timers pour chaque étape
-    const timers = {};
-    steps.forEach(step => {
-      if (step.duration > 0) {
-        timers[step.id] = {
-          total: step.duration * 60, // Convertir en secondes
-          remaining: step.duration * 60,
-          isRunning: false,
-          isCompleted: false
-        };
+    const savedProgress = localStorage.getItem('instructionProgress');
+    if (savedProgress) {
+      try {
+        const { activeStep: savedActiveStep, completedSteps: savedCompleted } = JSON.parse(savedProgress);
+        setActiveStep(savedActiveStep);
+        setCompletedSteps(new Set(savedCompleted));
+      } catch (error) {
+        console.log('Erreur lors du chargement de la progression:', error);
       }
-    });
-    setStepTimers(timers);
-  }, [steps.length]);
-
-  // Gérer le timer d'une étape
-  useEffect(() => {
-    const intervals = {};
-    
-    Object.keys(stepTimers).forEach(stepId => {
-      const timer = stepTimers[stepId];
-      if (timer && timer.isRunning && timer.remaining > 0) {
-        intervals[stepId] = setInterval(() => {
-          setStepTimers(prev => {
-            const newTimers = { ...prev };
-            if (newTimers[stepId].remaining > 0) {
-              newTimers[stepId].remaining -= 1;
-            } else {
-              newTimers[stepId].isRunning = false;
-              newTimers[stepId].isCompleted = true;
-            }
-            return newTimers;
-          });
-        }, 1000);
-      }
-    });
-
-    return () => {
-      Object.values(intervals).forEach(interval => clearInterval(interval));
-    };
-  }, [stepTimers]);
-
-  const startTimer = (stepId) => {
-    setStepTimers(prev => ({
-      ...prev,
-      [stepId]: {
-        ...prev[stepId],
-        isRunning: true
-      }
-    }));
-  };
-
-  const pauseTimer = (stepId) => {
-    setStepTimers(prev => ({
-      ...prev,
-      [stepId]: {
-        ...prev[stepId],
-        isRunning: false
-      }
-    }));
-  };
-
-  const resetTimer = (stepId) => {
-    const step = steps.find(s => s.id === parseInt(stepId));
-    if (step) {
-      setStepTimers(prev => ({
-        ...prev,
-        [stepId]: {
-          ...prev[stepId],
-          remaining: step.duration * 60,
-          isRunning: false,
-          isCompleted: false
-        }
-      }));
     }
-  };
+  }, []);
 
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  // Sauvegarder la progression
+  const saveProgress = (currentStep, currentCompleted) => {
+    localStorage.setItem('instructionProgress', JSON.stringify({
+      activeStep: currentStep,
+      completedSteps: Array.from(currentCompleted)
+    }));
   };
 
   const handleNext = () => {
-    // Marquer l'étape actuelle comme terminée
-    setCompletedSteps(prev => new Set([...prev, activeStep]));
+    const newCompleted = new Set([...completedSteps, activeStep]);
+    setCompletedSteps(newCompleted);
     
-    if (activeStep === steps.length - 1) {
+    // Enregistrer la durée de l'étape
+    if (stepStartTime) {
+      const duration = Math.round((Date.now() - stepStartTime) / 1000);
+      setStepDurations(prev => ({
+        ...prev,
+        [activeStep]: duration
+      }));
+    }
+    
+    if (activeStep === instructions.length - 1) {
       // Toutes les étapes sont terminées
       onComplete();
+      localStorage.removeItem('instructionProgress'); // Nettoyer la sauvegarde
     } else {
-      setActiveStep(prev => prev + 1);
+      const nextStep = activeStep + 1;
+      setActiveStep(nextStep);
+      setStepStartTime(Date.now());
+      saveProgress(nextStep, newCompleted);
     }
   };
 
   const handleBack = () => {
-    setActiveStep(prev => prev - 1);
+    if (activeStep > 0) {
+      const newActiveStep = activeStep - 1;
+      setActiveStep(newActiveStep);
+      setStepStartTime(Date.now());
+      saveProgress(newActiveStep, completedSteps);
+    }
   };
 
-  const handleAddNote = (stepId) => {
-    setCurrentNoteStep(stepId);
-    setTempNote(stepNotes[stepId] || '');
-    setNoteDialogOpen(true);
+  const handleStepClick = (stepIndex) => {
+    // Permettre de naviguer vers les étapes précédentes ou la suivante si toutes les précédentes sont complètes
+    const canNavigate = stepIndex <= activeStep || 
+      (stepIndex === activeStep + 1 && completedSteps.has(activeStep));
+    
+    if (canNavigate) {
+      setActiveStep(stepIndex);
+      setStepStartTime(Date.now());
+      saveProgress(stepIndex, completedSteps);
+    }
   };
 
-  const handleSaveNote = () => {
-    setStepNotes(prev => ({
-      ...prev,
-      [currentNoteStep]: tempNote
-    }));
-    setNoteDialogOpen(false);
-    setCurrentNoteStep(null);
-    setTempNote('');
+  const formatDuration = (seconds) => {
+    if (seconds < 60) return `${seconds}s`;
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    return `${minutes}m ${remainingSeconds}s`;
   };
 
-  const getStepStatus = (stepIndex) => {
-    if (completedSteps.has(stepIndex)) return 'completed';
-    if (stepIndex === activeStep) return 'active';
-    return 'pending';
-  };
+  const totalSteps = instructions.length;
+  const completedCount = completedSteps.size;
+  const progressPercentage = (completedCount / totalSteps) * 100;
 
-  const isAllCompleted = completedSteps.size === steps.length;
+  if (completed) {
+    return (
+      <Alert severity="success" sx={{ mb: 2 }}>
+        <Typography variant="h6" gutterBottom>
+          ✅ Instructions complétées
+        </Typography>
+        <Typography variant="body2">
+          Toutes les étapes de production ont été suivies avec succès.
+        </Typography>
+      </Alert>
+    );
+  }
 
   return (
     <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
         <Typography variant="h6">
           Instructions de production
         </Typography>
         <Chip 
-          label={`${completedSteps.size}/${steps.length} étapes terminées`}
-          color={isAllCompleted ? 'success' : 'primary'}
-          icon={isAllCompleted ? <CheckCircleIcon /> : <ScheduleIcon />}
+          label={`${completedCount}/${totalSteps} étapes`}
+          color={completedCount === totalSteps ? 'success' : 'primary'}
+          variant="outlined"
+        />
+      </Box>
+
+      {/* Barre de progression globale */}
+      <Box sx={{ mb: 3 }}>
+        <Typography variant="body2" color="text.secondary" gutterBottom>
+          Progression globale: {Math.round(progressPercentage)}%
+        </Typography>
+        <LinearProgress 
+          variant="determinate" 
+          value={progressPercentage} 
+          sx={{ height: 8, borderRadius: 4 }}
         />
       </Box>
       
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Suivez chaque étape dans l'ordre. Utilisez les timers pour respecter les durées recommandées.
-      </Typography>
-
-      {isAllCompleted && (
-        <Alert severity="success" sx={{ mb: 3 }}>
-          <Typography variant="body2">
-            <strong>Toutes les étapes sont terminées !</strong> Vous pouvez maintenant passer au contrôle qualité.
-          </Typography>
-        </Alert>
-      )}
-      
       <Stepper activeStep={activeStep} orientation="vertical">
-        {steps.map((step, index) => {
-          const timer = stepTimers[step.id];
-          const status = getStepStatus(index);
-          
+        {instructions.map((instruction, index) => {
+          const isCompleted = completedSteps.has(index);
+          const isActive = index === activeStep;
+          const canAccess = index <= activeStep || 
+            (index === activeStep + 1 && completedSteps.has(activeStep));
+
           return (
-            <Step key={step.id} completed={completedSteps.has(index)}>
-              <StepLabel
-                optional={
-                  step.duration > 0 && (
-                    <Typography variant="caption" color="text.secondary">
-                      Durée recommandée: {step.duration} min
-                    </Typography>
-                  )
-                }
-                StepIconComponent={({ active, completed }) => (
-                  <Box
-                    sx={{
-                      width: 32,
-                      height: 32,
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      bgcolor: completed ? 'success.main' : active ? 'primary.main' : 'grey.300',
-                      color: 'white'
-                    }}
-                  >
-                    {completed ? <CheckIcon /> : index + 1}
-                  </Box>
-                )}
+            <Step key={index} completed={isCompleted}>
+              <StepLabel 
+                onClick={() => handleStepClick(index)}
+                sx={{ 
+                  cursor: canAccess ? 'pointer' : 'default',
+                  opacity: canAccess ? 1 : 0.6
+                }}
               >
-                <Typography variant="h6" component="div">
-                  {step.title}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="h6">
+                    Étape {index + 1}: {instruction.title}
+                  </Typography>
+                  {instruction.duration && (
+                    <Chip
+                      icon={<AccessTimeIcon />}
+                      label={`${instruction.duration} min`}
+                      size="small"
+                      variant="outlined"
+                    />
+                  )}
+                  {isCompleted && (
+                    <CheckCircleIcon color="success" fontSize="small" />
+                  )}
+                </Box>
               </StepLabel>
-              
+
               <StepContent>
-                <Card sx={{ mb: 2 }}>
-                  <CardContent>
-                    {/* Timer section */}
-                    {timer && (
-                      <Box sx={{ mb: 3, p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                          <Typography variant="subtitle2">
-                            Timer de l'étape
-                          </Typography>
-                          <Typography variant="h6" color={timer.remaining <= 60 ? 'error.main' : 'text.primary'}>
-                            {formatTime(timer.remaining)}
-                          </Typography>
-                        </Box>
-                        
-                        <LinearProgress 
-                          variant="determinate" 
-                          value={((timer.total - timer.remaining) / timer.total) * 100}
-                          sx={{ mb: 2, height: 8, borderRadius: 4 }}
-                          color={timer.isCompleted ? 'success' : timer.remaining <= 60 ? 'error' : 'primary'}
+                <Paper sx={{ p: 3, mb: 2, bgcolor: 'grey.50' }}>
+                  {/* Instructions détaillées */}
+                  <List dense>
+                    {instruction.steps.map((step, stepIndex) => (
+                      <ListItem key={stepIndex} sx={{ pl: 0 }}>
+                        <ListItemText 
+                          primary={`${stepIndex + 1}. ${step}`}
+                          sx={{ 
+                            textAlign: 'justify',
+                            '& .MuiListItemText-primary': {
+                              fontSize: '0.95rem',
+                              lineHeight: 1.5
+                            }
+                          }}
                         />
-                        
-                        <Box sx={{ display: 'flex', gap: 1 }}>
-                          {!timer.isRunning ? (
-                            <Button
-                              size="small"
-                              startIcon={<PlayArrowIcon />}
-                              onClick={() => startTimer(step.id)}
-                              disabled={timer.isCompleted}
-                            >
-                              Démarrer
-                            </Button>
-                          ) : (
-                            <Button
-                              size="small"
-                              startIcon={<PauseIcon />}
-                              onClick={() => pauseTimer(step.id)}
-                            >
-                              Pause
-                            </Button>
-                          )}
-                          <Button
-                            size="small"
-                            onClick={() => resetTimer(step.id)}
-                          >
-                            Reset
-                          </Button>
-                        </Box>
-                        
-                        {timer.isCompleted && (
-                          <Alert severity="success" sx={{ mt: 2 }}>
-                            Durée recommandée atteinte !
-                          </Alert>
-                        )}
-                      </Box>
-                    )}
-                    
-                    {/* Instructions */}
-                    <Typography variant="subtitle2" gutterBottom>
-                      Instructions :
-                    </Typography>
-                    <List dense>
-                      {step.instructions.map((instruction, instrIndex) => (
-                        <ListItem key={instrIndex}>
-                          <ListItemIcon>
-                            <Typography variant="body2" color="primary.main" fontWeight="bold">
-                              {instrIndex + 1}.
-                            </Typography>
-                          </ListItemIcon>
-                          <ListItemText 
-                            primary={instruction}
-                            sx={{ textAlign: 'justify' }}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
-                    
-                    {/* Note de l'étape */}
-                    {step.note && (
-                      <Alert severity="info" sx={{ mt: 2 }}>
-                        <Typography variant="body2">
-                          <strong>Note importante :</strong> {step.note}
-                        </Typography>
-                      </Alert>
-                    )}
-                    
-                    {/* Notes personnelles */}
-                    {stepNotes[step.id] && (
-                      <Box sx={{ mt: 2, p: 2, bgcolor: 'warning.light', borderRadius: 1 }}>
-                        <Typography variant="subtitle2" gutterBottom>
-                          Vos notes :
-                        </Typography>
-                        <Typography variant="body2">
-                          {stepNotes[step.id]}
-                        </Typography>
-                      </Box>
-                    )}
-                  </CardContent>
-                </Card>
+                      </ListItem>
+                    ))}
+                  </List>
+                  
+                  {/* Note ou informations supplémentaires */}
+                  {instruction.note && (
+                    <Box sx={{ mt: 2, p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+                      <Typography variant="body2" color="info.contrastText" sx={{ fontStyle: 'italic' }}>
+                        💡 {instruction.note}
+                      </Typography>
+                    </Box>
+                  )}
+
+                  {/* Durée réelle de l'étape */}
+                  {stepDurations[index] && (
+                    <Box sx={{ mt: 2 }}>
+                      <Chip
+                        icon={<CheckCircleIcon />}
+                        label={`Terminé en ${formatDuration(stepDurations[index])}`}
+                        color="success"
+                        size="small"
+                      />
+                    </Box>
+                  )}
+                </Paper>
                 
-                <Box sx={{ mb: 2, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                {/* Boutons de navigation */}
+                <Box sx={{ mb: 2 }}>
                   <Button
                     variant="contained"
                     onClick={handleNext}
-                    sx={{ mt: 1 }}
+                    sx={{ mt: 1, mr: 1 }}
+                    startIcon={index === instructions.length - 1 ? <CheckCircleIcon /> : <PlayArrowIcon />}
                   >
-                    {index === steps.length - 1 ? 'Terminer toutes les étapes' : 'Étape suivante'}
+                    {index === instructions.length - 1 ? 'Terminer toutes les instructions' : 'Étape suivante'}
                   </Button>
                   
                   <Button
                     disabled={index === 0}
                     onClick={handleBack}
-                    sx={{ mt: 1 }}
+                    sx={{ mt: 1, mr: 1 }}
                   >
-                    Précédent
+                    Étape précédente
                   </Button>
-                  
-                  <Button
-                    variant="outlined"
-                    onClick={() => handleAddNote(step.id)}
-                    sx={{ mt: 1 }}
-                  >
-                    {stepNotes[step.id] ? 'Modifier note' : 'Ajouter note'}
-                  </Button>
+
+                  {isActive && instruction.duration && (
+                    <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                      ⏱️ Durée estimée pour cette étape: {instruction.duration} minutes
+                    </Typography>
+                  )}
                 </Box>
               </StepContent>
             </Step>
           );
         })}
       </Stepper>
-      
-      {/* Dialog pour ajouter des notes */}
-      <Dialog open={noteDialogOpen} onClose={() => setNoteDialogOpen(false)} maxWidth="md" fullWidth>
-        <DialogTitle>Ajouter une note personnelle</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Note"
-            fullWidth
-            multiline
-            rows={4}
-            variant="outlined"
-            value={tempNote}
-            onChange={(e) => setTempNote(e.target.value)}
-            placeholder="Notez vos observations, modifications ou remarques importantes..."
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setNoteDialogOpen(false)}>Annuler</Button>
-          <Button onClick={handleSaveNote} variant="contained">Sauvegarder</Button>
-        </DialogActions>
-      </Dialog>
+
+      {/* Résumé des durées */}
+      {Object.keys(stepDurations).length > 0 && (
+        <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: 1, borderColor: 'divider' }}>
+          <Typography variant="subtitle2" gutterBottom>
+            📊 Temps réalisés par étape:
+          </Typography>
+          {Object.entries(stepDurations).map(([stepIndex, duration]) => (
+            <Typography key={stepIndex} variant="body2" color="text.secondary">
+              • Étape {parseInt(stepIndex) + 1}: {formatDuration(duration)}
+            </Typography>
+          ))}
+          <Typography variant="body2" sx={{ mt: 1, fontWeight: 'medium' }}>
+            Temps total: {formatDuration(Object.values(stepDurations).reduce((a, b) => a + b, 0))}
+          </Typography>
+        </Box>
+      )}
+
+      {/* Message d'aide */}
+      {completedCount === 0 && (
+        <Alert severity="info" sx={{ mt: 2 }}>
+          <Typography variant="body2">
+            💡 Suivez chaque étape dans l'ordre. Vous pouvez revenir aux étapes précédentes si nécessaire.
+          </Typography>
+        </Alert>
+      )}
     </Box>
   );
 };

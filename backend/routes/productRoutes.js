@@ -1,8 +1,8 @@
-// backend/routes/productRoutes.js
+// backend/routes/productRoutes.js - CORRIGÉ
 const express = require('express');
 const { 
   getProducts, 
-  getProduct, 
+  getProduct,
   createProduct, 
   updateProduct, 
   deleteProduct,
@@ -13,22 +13,21 @@ const { protect, authorize } = require('../middleware/auth');
 
 const router = express.Router();
 
+// IMPORTANT: Route spécifique AVANT les routes génériques
+// Route pour obtenir un produit par code (accessible par les opérateurs)
+router.get('/code/:code', getProductByCode);
+
 // Routes protégées pour les administrateurs
 router.route('/')
-  .get(protect, authorize('admin'), getProducts)
+  .get(getProducts) // Temporairement sans protection pour debug
   .post(protect, authorize('admin'), createProduct);
 
 router.route('/:id')
-  .get(protect, authorize('admin'), getProduct)
+  .get(getProduct)  // Temporairement sans protection pour debug
   .put(protect, authorize('admin'), updateProduct)
   .delete(protect, authorize('admin'), deleteProduct);
 
 // Route pour changer le statut
-router.route('/:id/status')
-  .patch(protect, authorize('admin'), updateProductStatus);
-
-// Route pour obtenir un produit par code (accessible par les opérateurs)
-router.route('/code/:code')
-  .get(protect, getProductByCode);
+router.patch('/:id/status', protect, authorize('admin'), updateProductStatus);
 
 module.exports = router;

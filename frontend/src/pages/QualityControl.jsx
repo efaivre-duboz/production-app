@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
-  Box,
+  Container,
   Typography,
+  Box,
   Paper,
+  Button,
   Grid,
   TextField,
   FormControl,
@@ -10,527 +13,526 @@ import {
   RadioGroup,
   FormControlLabel,
   Radio,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
   Divider,
   Alert,
-  Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  IconButton,
-  Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemIcon,
-  Collapse
+  Stepper,
+  Step,
+  StepLabel,
+  Card,
+  CardContent,
+  LinearProgress,
+  Tabs,
+  Tab,
+  Chip
 } from '@mui/material';
-import {
-  CheckCircle as CheckCircleIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Info as InfoIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  PhotoCamera as PhotoCameraIcon,
-  Description as DescriptionIcon,
-  ExpandLess,
-  ExpandMore,
-  Science as ScienceIcon,
-  Visibility as VisibilityIcon
-} from '@mui/icons-material';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import WarningIcon from '@mui/icons-material/Warning';
+import ScienceIcon from '@mui/icons-material/Science';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import SpeedIcon from '@mui/icons-material/Speed';
 
-const QualityChecksForm = ({ 
-  qualityChecks, 
-  onUpdate, 
-  onValidate, 
-  productInfo,
-  isReadOnly = false 
-}) => {
-  const [checks, setChecks] = useState({});
-  const [validated, setValidated] = useState(false);
-  const [expandedSections, setExpandedSections] = useState({
-    visual: true,
-    physical: true,
-    chemical: true
-  });
-  const [photoDialog, setPhotoDialog] = useState({ open: false, checkId: null });
-  const [notes, setNotes] = useState('');
-
-  // Initialiser les contrôles qualité
+const QualityControl = () => {
+  const navigate = useNavigate();
+  const [loading, setLoading] = useState(true);
+  const [product, setProduct] = useState(null);
+  const [production, setProduction] = useState(null);
+  const [qualityChecks, setQualityChecks] = useState([]);
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [tabValue, setTabValue] = useState(0);
+  const [error, setError] = useState('');
+  
+  // Charger les données au montage
   useEffect(() => {
-    if (qualityChecks && qualityChecks.length > 0) {
-      const initialChecks = {};
-      qualityChecks.forEach(check => {
-        initialChecks[check.name] = {
-          id: check.name,
+    loadQualityData();
+  }, []);
+
+  const loadQualityData = async () => {
+    try {
+      setLoading(true);
+      
+      // Récupérer les données sauvegardées
+      const productData = JSON.parse(localStorage.getItem('currentProductData') || '{}');
+      const productCode = localStorage.getItem('currentProductCode');
+      const batchNumber = localStorage.getItem('currentBatchNumber');
+      
+      if (!productData.code || !productCode) {
+        setError('Données de production manquantes. Veuillez recommencer depuis le scan.');
+        return;
+      }
+      
+      setProduct(productData);
+      
+      // Données de production
+      const productionData = {
+        productCode: productCode,
+        batchNumber: batchNumber,
+        operator: localStorage.getItem('currentOperator') || 'Utilisateur',
+        startTime: localStorage.getItem('productionStartTime')
+      };
+      setProduction(productionData);
+      
+      // Préparer les contrôles qualité
+      if (productData.recipe && productData.recipe.qualityChecks) {
+        const checks = productData.recipe.qualityChecks.map((check, index) => ({
+          id: index + 1,
           name: check.name,
           type: check.type,
           expectedValue: check.expectedValue,
           actualValue: '',
-          result: 'pending',
+          result: '',
           notes: '',
-          photos: [],
-          timestamp: null
-        };
-      });
-      setChecks(initialChecks);
-    } else {
-      // Contrôles par défaut si aucun n'est fourni
-      setChecks({
-        'Apparence': {
-          id: 'apparence',
-          name: 'Apparence',
-          type: 'visuel',
-          expectedValue: 'Conforme aux spécifications',
-          actualValue: '',
-          result: 'pending',
-          notes: '',
-          photos: [],
-          timestamp: null
-        },
-        'Viscosité': {
-          id: 'viscosite',
-          name: 'Viscosité',
-          type: 'physique',
-          expectedValue: '3000-4000 cP',
-          actualValue: '',
-          result: 'pending',
-          notes: '',
-          photos: [],
-          timestamp: null
-        },
-        'pH': {
-          id: 'ph',
-          name: 'pH',
-          type: 'chimique',
-          expectedValue: '7.0-7.5',
-          actualValue: '',
-          result: 'pending',
-          notes: '',
-          photos: [],
-          timestamp: null
-        },
-        'Odeur': {
-          id: 'odeur',
-          name: 'Odeur',
-          type: 'olfactif',
-          expectedValue: 'Fraîcheur, légère note d\'agrumes',
-          actualValue: '',
-          result: 'pending',
-          notes: '',
-          photos: [],
-          timestamp: null
-        }
-      });
-    }
-  }, [qualityChecks]);
-
-  // Grouper les contrôles par type
-  const groupedChecks = Object.values(checks).reduce((groups, check) => {
-    const category = getCheckCategory(check.type);
-    if (!groups[category]) {
-      groups[category] = [];
-    }
-    groups[category].push(check);
-    return groups;
-  }, {});
-
-  function getCheckCategory(type) {
-    const categories = {
-      'visuel': 'visual',
-      'physique': 'physical',
-      'chimique': 'chemical',
-      'microbiologique': 'chemical',
-      'fonctionnel': 'physical',
-      'olfactif': 'visual',
-      'environnemental': 'chemical'
-    };
-    return categories[type] || 'other';
-  }
-
-  function getCategoryInfo(category) {
-    const info = {
-      visual: {
-        title: 'Contrôles Visuels et Sensoriels',
-        icon: <VisibilityIcon />,
-        color: 'primary'
-      },
-      physical: {
-        title: 'Contrôles Physiques',
-        icon: <ScienceIcon />,
-        color: 'secondary'
-      },
-      chemical: {
-        title: 'Contrôles Chimiques',
-        icon: <ScienceIcon />,
-        color: 'success'
-      },
-      other: {
-        title: 'Autres Contrôles',
-        icon: <InfoIcon />,
-        color: 'info'
+          icon: getCheckIcon(check.type)
+        }));
+        setQualityChecks(checks);
       }
-    };
-    return info[category] || info.other;
-  }
-
-  const handleCheckUpdate = (checkId, field, value) => {
-    if (isReadOnly) return;
-
-    setChecks(prev => {
-      const updated = {
-        ...prev,
-        [checkId]: {
-          ...prev[checkId],
-          [field]: value,
-          timestamp: field === 'result' ? new Date().toISOString() : prev[checkId].timestamp
-        }
-      };
-
-      // Auto-déterminer le résultat pour certains types
-      if (field === 'actualValue' && updated[checkId].type === 'chimique') {
-        const actual = parseFloat(value);
-        const expected = updated[checkId].expectedValue;
-        
-        if (expected.includes('-')) {
-          const [min, max] = expected.split('-').map(v => parseFloat(v.trim()));
-          if (actual >= min && actual <= max) {
-            updated[checkId].result = 'conforme';
-          } else {
-            updated[checkId].result = 'non-conforme';
-          }
-        }
+      
+      // Vérifier si déjà soumis
+      const savedQualityData = localStorage.getItem('qualityControlData');
+      if (savedQualityData) {
+        const parsedData = JSON.parse(savedQualityData);
+        setQualityChecks(parsedData.checks);
+        setFormSubmitted(parsedData.submitted || false);
       }
-
-      return updated;
-    });
+      
+    } catch (err) {
+      console.error('Erreur lors du chargement des données qualité:', err);
+      setError('Erreur lors du chargement des données de contrôle qualité');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSectionToggle = (section) => {
-    setExpandedSections(prev => ({
-      ...prev,
-      [section]: !prev[section]
-    }));
+  const getCheckIcon = (type) => {
+    switch (type) {
+      case 'visuel': return <VisibilityIcon />;
+      case 'physique': return <SpeedIcon />;
+      case 'chimique': return <ScienceIcon />;
+      case 'olfactif': return <VisibilityIcon />;
+      default: return <ScienceIcon />;
+    }
   };
 
-  const getResultColor = (result) => {
-    switch (result) {
-      case 'conforme': return 'success';
-      case 'non-conforme': return 'error';
-      case 'acceptable': return 'warning';
+  const getCheckColor = (type) => {
+    switch (type) {
+      case 'visuel': return 'primary';
+      case 'physique': return 'secondary';
+      case 'chimique': return 'error';
+      case 'olfactif': return 'success';
       default: return 'default';
     }
   };
 
-  const getResultIcon = (result) => {
-    switch (result) {
-      case 'conforme': return <CheckCircleIcon />;
-      case 'non-conforme': return <ErrorIcon />;
-      case 'acceptable': return <WarningIcon />;
-      default: return <InfoIcon />;
-    }
-  };
-
-  const isAllChecksCompleted = () => {
-    return Object.values(checks).every(check => 
-      check.result !== 'pending' && check.actualValue.trim() !== ''
+  const handleCheckChange = (checkId, field, value) => {
+    setQualityChecks(prevChecks => 
+      prevChecks.map(check => 
+        check.id === checkId 
+          ? { ...check, [field]: value }
+          : check
+      )
     );
   };
 
-  const getOverallResult = () => {
-    const results = Object.values(checks).map(check => check.result);
-    if (results.includes('non-conforme')) return 'non-conforme';
-    if (results.includes('acceptable')) return 'acceptable';
-    if (results.every(r => r === 'conforme')) return 'conforme';
-    return 'pending';
-  };
-
-  const handleValidate = () => {
-    if (!isAllChecksCompleted()) {
-      alert('Veuillez compléter tous les contrôles avant de valider.');
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    // Validation
+    const incompleteChecks = qualityChecks.filter(check => 
+      !check.result || (check.type === 'chimique' && !check.actualValue)
+    );
+    
+    if (incompleteChecks.length > 0) {
+      setError(`Veuillez compléter tous les contrôles : ${incompleteChecks.map(c => c.name).join(', ')}`);
       return;
     }
-
-    const overallResult = getOverallResult();
     
-    if (overallResult === 'non-conforme') {
-      const confirm = window.confirm(
-        'Certains contrôles sont non-conformes. Voulez-vous vraiment valider ces résultats ?'
-      );
-      if (!confirm) return;
-    }
-
-    const formData = {
-      checks: Object.values(checks),
-      overallResult,
-      notes,
-      completedAt: new Date().toISOString(),
-      operator: 'Current User' // À remplacer par l'utilisateur connecté
+    // Sauvegarder les données
+    const qualityData = {
+      checks: qualityChecks,
+      submitted: true,
+      submittedAt: new Date().toISOString()
     };
-
-    setValidated(true);
-    onValidate(formData);
-    if (onUpdate) onUpdate(formData);
+    
+    localStorage.setItem('qualityControlData', JSON.stringify(qualityData));
+    localStorage.setItem('qualityControlCompleted', 'true');
+    
+    setFormSubmitted(true);
+    setError('');
+    
+    console.log('✅ Contrôle qualité complété:', qualityData);
+  };
+  
+  const handleContinue = () => {
+    navigate('/end');
   };
 
-  const handleAddPhoto = (checkId) => {
-    setPhotoDialog({ open: true, checkId });
+  const handleTabChange = (event, newValue) => {
+    setTabValue(newValue);
   };
 
-  const renderCheckCard = (check) => (
-    <Card key={check.id} sx={{ mb: 2 }}>
-      <CardContent>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2 }}>
-          <Box>
-            <Typography variant="h6" component="div">
-              {check.name}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Valeur attendue: {check.expectedValue}
-            </Typography>
-          </Box>
-          <Chip
-            icon={getResultIcon(check.result)}
-            label={check.result === 'pending' ? 'En attente' : 
-                  check.result === 'conforme' ? 'Conforme' :
-                  check.result === 'non-conforme' ? 'Non conforme' : 'Acceptable'}
-            color={getResultColor(check.result)}
-            size="small"
-          />
+  // Calculer les statistiques
+  const completedChecks = qualityChecks.filter(check => check.result).length;
+  const conformeChecks = qualityChecks.filter(check => check.result === 'conforme').length;
+  const nonConformeChecks = qualityChecks.filter(check => check.result === 'non-conforme').length;
+  const progressPercentage = qualityChecks.length > 0 ? (completedChecks / qualityChecks.length) * 100 : 0;
+
+  // Séparer les contrôles par type
+  const checksByType = qualityChecks.reduce((acc, check) => {
+    if (!acc[check.type]) acc[check.type] = [];
+    acc[check.type].push(check);
+    return acc;
+  }, {});
+
+  const steps = ['Scan de production', 'Recette et instructions', 'Contrôle qualité', 'Fin de production'];
+
+  if (loading) {
+    return (
+      <Container maxWidth="lg">
+        <Box sx={{ mt: 4, display: 'flex', justifyContent: 'center' }}>
+          <Typography>Chargement des données de contrôle qualité...</Typography>
         </Box>
+      </Container>
+    );
+  }
 
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={6}>
-            <TextField
-              fullWidth
-              label="Valeur mesurée"
-              value={check.actualValue}
-              onChange={(e) => handleCheckUpdate(check.name, 'actualValue', e.target.value)}
-              disabled={isReadOnly}
-              size="small"
-              type={check.type === 'chimique' ? 'number' : 'text'}
-            />
-          </Grid>
-          
-          <Grid item xs={12} md={6}>
-            <FormControl component="fieldset" fullWidth>
-              <FormLabel component="legend">Résultat</FormLabel>
-              <RadioGroup
-                row
-                value={check.result}
-                onChange={(e) => handleCheckUpdate(check.name, 'result', e.target.value)}
-              >
-                <FormControlLabel 
-                  value="conforme" 
-                  control={<Radio />} 
-                  label="Conforme"
-                  disabled={isReadOnly}
-                />
-                <FormControlLabel 
-                  value="acceptable" 
-                  control={<Radio />} 
-                  label="Acceptable"
-                  disabled={isReadOnly}
-                />
-                <FormControlLabel 
-                  value="non-conforme" 
-                  control={<Radio />} 
-                  label="Non conforme"
-                  disabled={isReadOnly}
-                />
-              </RadioGroup>
-            </FormControl>
-          </Grid>
-
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              label="Notes et observations"
-              multiline
-              rows={2}
-              value={check.notes}
-              onChange={(e) => handleCheckUpdate(check.name, 'notes', e.target.value)}
-              disabled={isReadOnly}
-              size="small"
-            />
-          </Grid>
-
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
-              <Button
-                startIcon={<PhotoCameraIcon />}
-                onClick={() => handleAddPhoto(check.id)}
-                disabled={isReadOnly}
-                size="small"
-              >
-                Ajouter photo
-              </Button>
-              {check.photos && check.photos.length > 0 && (
-                <Chip label={`${check.photos.length} photo(s)`} size="small" />
-              )}
-            </Box>
-          </Grid>
-        </Grid>
-      </CardContent>
-    </Card>
-  );
+  if (error && !product) {
+    return (
+      <Container maxWidth="lg">
+        <Box sx={{ mt: 4 }}>
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+          <Button variant="contained" onClick={() => navigate('/')}>
+            Retour au scan
+          </Button>
+        </Box>
+      </Container>
+    );
+  }
 
   return (
-    <Box>
-      <Typography variant="h6" gutterBottom>
-        Contrôles Qualité
-      </Typography>
+    <Container maxWidth="lg">
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h4" component="h1" gutterBottom align="center" fontWeight="bold">
+          Contrôle Qualité
+        </Typography>
+        <Typography variant="subtitle1" gutterBottom align="center" sx={{ mb: 4 }}>
+          Effectuez les vérifications de qualité requises pour ce lot de production
+        </Typography>
 
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Effectuez tous les contrôles qualité requis selon les spécifications du produit.
-      </Typography>
-
-      {/* Résumé du produit */}
-      {productInfo && (
-        <Card sx={{ mb: 3, bgcolor: 'grey.50' }}>
-          <CardContent>
-            <Typography variant="subtitle1" gutterBottom>
-              Informations du produit
+        <Stepper activeStep={2} alternativeLabel sx={{ mb: 4 }}>
+          {steps.map((label) => (
+            <Step key={label}>
+              <StepLabel>{label}</StepLabel>
+            </Step>
+          ))}
+        </Stepper>
+        
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+        
+        {formSubmitted ? (
+          <Paper sx={{ p: 4, mb: 3, textAlign: 'center' }}>
+            <CheckCircleOutlineIcon sx={{ fontSize: 80, color: 'success.main', mb: 2 }} />
+            <Typography variant="h5" gutterBottom>
+              Contrôle qualité complété avec succès
             </Typography>
-            <Grid container spacing={2}>
+            <Typography variant="body1" paragraph>
+              Les informations de contrôle qualité ont été enregistrées.
+            </Typography>
+            
+            {/* Résumé des résultats */}
+            <Grid container spacing={2} sx={{ mt: 2, mb: 3 }}>
               <Grid item xs={12} sm={4}>
-                <Typography variant="body2" color="text.secondary">Produit:</Typography>
-                <Typography variant="body2">{productInfo.name} ({productInfo.code})</Typography>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="success.main">
+                      {conformeChecks}
+                    </Typography>
+                    <Typography variant="body2">
+                      Contrôles conformes
+                    </Typography>
+                  </CardContent>
+                </Card>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Typography variant="body2" color="text.secondary">Lot:</Typography>
-                <Typography variant="body2">{productInfo.batchNumber}</Typography>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="error.main">
+                      {nonConformeChecks}
+                    </Typography>
+                    <Typography variant="body2">
+                      Non-conformités
+                    </Typography>
+                  </CardContent>
+                </Card>
               </Grid>
               <Grid item xs={12} sm={4}>
-                <Typography variant="body2" color="text.secondary">Date:</Typography>
-                <Typography variant="body2">{new Date().toLocaleDateString()}</Typography>
+                <Card>
+                  <CardContent sx={{ textAlign: 'center' }}>
+                    <Typography variant="h4" color="primary.main">
+                      {completedChecks}
+                    </Typography>
+                    <Typography variant="body2">
+                      Total vérifié
+                    </Typography>
+                  </CardContent>
+                </Card>
               </Grid>
             </Grid>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Résultat global */}
-      {validated && (
-        <Alert 
-          severity={getOverallResult() === 'conforme' ? 'success' : 
-                   getOverallResult() === 'non-conforme' ? 'error' : 'warning'}
-          sx={{ mb: 3 }}
-        >
-          <Typography variant="body2">
-            <strong>Résultat global: </strong>
-            {getOverallResult() === 'conforme' ? 'Tous les contrôles sont conformes' :
-             getOverallResult() === 'non-conforme' ? 'Certains contrôles sont non-conformes' :
-             'Contrôles acceptables avec réserves'}
-          </Typography>
-        </Alert>
-      )}
-
-      {/* Sections de contrôles */}
-      {Object.entries(groupedChecks).map(([category, categoryChecks]) => {
-        const categoryInfo = getCategoryInfo(category);
-        return (
-          <Paper key={category} sx={{ mb: 2 }}>
-            <Box
-              sx={{
-                p: 2,
-                bgcolor: `${categoryInfo.color}.light`,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between'
-              }}
-              onClick={() => handleSectionToggle(category)}
+            
+            <Button 
+              variant="contained" 
+              color="primary"
+              size="large"
+              onClick={handleContinue}
+              sx={{ mt: 2 }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                {categoryInfo.icon}
-                <Typography variant="h6">{categoryInfo.title}</Typography>
-                <Chip 
-                  label={`${categoryChecks.length} contrôle(s)`} 
-                  size="small" 
-                  color={categoryInfo.color}
+              Continuer vers la fin de production
+            </Button>
+          </Paper>
+        ) : (
+          <Box component="form" onSubmit={handleSubmit}>
+            <Paper sx={{ p: 3, mb: 3 }}>
+              <Typography variant="h6" gutterBottom sx={{ borderBottom: '1px solid', borderColor: 'divider', pb: 1, mb: 3 }}>
+                Informations du produit
+              </Typography>
+              
+              <Grid container spacing={3} sx={{ mb: 3 }}>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="body1" color="text.secondary">
+                    Produit:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {product?.name} ({product?.code})
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="body1" color="text.secondary">
+                    Lot:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {production?.batchNumber}
+                  </Typography>
+                </Grid>
+                <Grid item xs={12} sm={4}>
+                  <Typography variant="body1" color="text.secondary">
+                    Date de production:
+                  </Typography>
+                  <Typography variant="body1" fontWeight="medium">
+                    {production?.startTime ? new Date(production.startTime).toLocaleDateString() : new Date().toLocaleDateString()}
+                  </Typography>
+                </Grid>
+              </Grid>
+
+              {/* Progression */}
+              <Box sx={{ mb: 3 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                  <Typography variant="body2" color="text.secondary">
+                    Progression des contrôles:
+                  </Typography>
+                  <Chip 
+                    label={`${completedChecks}/${qualityChecks.length} complétés`}
+                    color={completedChecks === qualityChecks.length ? 'success' : 'default'}
+                  />
+                </Box>
+                <LinearProgress 
+                  variant="determinate" 
+                  value={progressPercentage} 
+                  sx={{ height: 10, borderRadius: 5 }}
                 />
               </Box>
-              {expandedSections[category] ? <ExpandLess /> : <ExpandMore />}
-            </Box>
+              
+              <Divider sx={{ my: 3 }} />
+              
+              <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }}>
+                <Tab label="Tous les contrôles" />
+                <Tab label="Par type" />
+                <Tab label="Résumé" />
+              </Tabs>
+
+              {/* Onglet 1: Tous les contrôles */}
+              {tabValue === 0 && (
+                <Grid container spacing={3}>
+                  {qualityChecks.map((check) => (
+                    <Grid item xs={12} md={6} key={check.id}>
+                      <Card sx={{ height: '100%' }}>
+                        <CardContent>
+                          <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                            <Box sx={{ color: `${getCheckColor(check.type)}.main`, mr: 1 }}>
+                              {check.icon}
+                            </Box>
+                            <Typography variant="h6">
+                              {check.name}
+                            </Typography>
+                            <Chip 
+                              label={check.type} 
+                              size="small" 
+                              color={getCheckColor(check.type)}
+                              sx={{ ml: 'auto' }}
+                            />
+                          </Box>
+                          
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Valeur attendue: <strong>{check.expectedValue}</strong>
+                          </Typography>
+
+                          {check.type === 'chimique' && (
+                            <TextField
+                              label="Valeur mesurée"
+                              name={`actualValue-${check.id}`}
+                              value={check.actualValue}
+                              onChange={(e) => handleCheckChange(check.id, 'actualValue', e.target.value)}
+                              fullWidth
+                              sx={{ mb: 2 }}
+                              placeholder="ex: 7.2"
+                            />
+                          )}
+
+                          <FormControl component="fieldset" sx={{ mb: 2, width: '100%' }} required>
+                            <FormLabel component="legend">Résultat</FormLabel>
+                            <RadioGroup
+                              name={`result-${check.id}`}
+                              value={check.result}
+                              onChange={(e) => handleCheckChange(check.id, 'result', e.target.value)}
+                              row
+                            >
+                              <FormControlLabel value="conforme" control={<Radio />} label="Conforme" />
+                              <FormControlLabel value="non-conforme" control={<Radio />} label="Non conforme" />
+                            </RadioGroup>
+                          </FormControl>
+
+                          <TextField
+                            label="Notes (optionnel)"
+                            name={`notes-${check.id}`}
+                            value={check.notes}
+                            onChange={(e) => handleCheckChange(check.id, 'notes', e.target.value)}
+                            multiline
+                            rows={2}
+                            fullWidth
+                            placeholder="Observations particulières..."
+                          />
+                        </CardContent>
+                      </Card>
+                    </Grid>
+                  ))}
+                </Grid>
+              )}
+
+              {/* Onglet 2: Par type */}
+              {tabValue === 1 && (
+                <Box>
+                  {Object.entries(checksByType).map(([type, checks]) => (
+                    <Paper key={type} sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="h6" gutterBottom sx={{ textTransform: 'capitalize' }}>
+                        Contrôles {type}s
+                      </Typography>
+                      <Grid container spacing={2}>
+                        {checks.map((check) => (
+                          <Grid item xs={12} sm={6} key={check.id}>
+                            <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 1 }}>
+                              <Typography variant="subtitle1">{check.name}</Typography>
+                              <Typography variant="body2" color="text.secondary">
+                                Attendu: {check.expectedValue}
+                              </Typography>
+                              {check.result && (
+                                <Chip 
+                                  label={check.result} 
+                                  color={check.result === 'conforme' ? 'success' : 'error'}
+                                  size="small"
+                                  sx={{ mt: 1 }}
+                                />
+                              )}
+                            </Box>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </Paper>
+                  ))}
+                </Box>
+              )}
+
+              {/* Onglet 3: Résumé */}
+              {tabValue === 2 && (
+                <Grid container spacing={3}>
+                  <Grid item xs={12} sm={4}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" color="primary.main">
+                          {completedChecks}
+                        </Typography>
+                        <Typography variant="body1">
+                          Contrôles effectués
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          sur {qualityChecks.length} au total
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" color="success.main">
+                          {conformeChecks}
+                        </Typography>
+                        <Typography variant="body1">
+                          Conformes
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {qualityChecks.length > 0 ? Math.round((conformeChecks / qualityChecks.length) * 100) : 0}% du total
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                  <Grid item xs={12} sm={4}>
+                    <Card>
+                      <CardContent sx={{ textAlign: 'center' }}>
+                        <Typography variant="h4" color="error.main">
+                          {nonConformeChecks}
+                        </Typography>
+                        <Typography variant="body1">
+                          Non-conformes
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          {nonConformeChecks > 0 ? 'Attention requise' : 'Aucun problème'}
+                        </Typography>
+                      </CardContent>
+                    </Card>
+                  </Grid>
+                </Grid>
+              )}
+            </Paper>
             
-            <Collapse in={expandedSections[category]}>
-              <Box sx={{ p: 2 }}>
-                {categoryChecks.map(check => renderCheckCard(check))}
-              </Box>
-            </Collapse>
-          </Paper>
-        );
-      })}
-
-      {/* Notes générales */}
-      <Paper sx={{ p: 3, mb: 3 }}>
-        <Typography variant="h6" gutterBottom>
-          Notes générales du contrôle qualité
-        </Typography>
-        <TextField
-          fullWidth
-          multiline
-          rows={4}
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="Ajoutez vos observations générales, recommandations ou commentaires..."
-          disabled={isReadOnly}
-        />
-      </Paper>
-
-      {/* Actions */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          {Object.values(checks).filter(c => c.result !== 'pending').length} / {Object.values(checks).length} contrôles complétés
-        </Typography>
-        
-        <Button
-          variant="contained"
-          onClick={handleValidate}
-          disabled={!isAllChecksCompleted() || validated || isReadOnly}
-          size="large"
-          startIcon={validated ? <CheckCircleIcon /> : undefined}
-        >
-          {validated ? 'Contrôles validés' : 'Valider les contrôles qualité'}
-        </Button>
+            <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+              <Button 
+                variant="outlined"
+                onClick={() => navigate('/recipe')}
+              >
+                Retour aux instructions
+              </Button>
+              
+              <Button 
+                variant="contained" 
+                color="primary"
+                type="submit"
+                size="large"
+                disabled={completedChecks < qualityChecks.length}
+                startIcon={nonConformeChecks > 0 ? <WarningIcon /> : <CheckCircleOutlineIcon />}
+              >
+                {nonConformeChecks > 0 ? 
+                  `Valider avec ${nonConformeChecks} non-conformité(s)` : 
+                  'Valider le contrôle qualité'
+                }
+              </Button>
+            </Box>
+          </Box>
+        )}
       </Box>
-
-      {/* Dialog pour photos */}
-      <Dialog open={photoDialog.open} onClose={() => setPhotoDialog({ open: false, checkId: null })}>
-        <DialogTitle>Ajouter une photo</DialogTitle>
-        <DialogContent>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Fonctionnalité à implémenter : capture et stockage des photos de contrôle qualité.
-          </Typography>
-          <input
-            type="file"
-            accept="image/*"
-            style={{ width: '100%' }}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setPhotoDialog({ open: false, checkId: null })}>
-            Annuler
-          </Button>
-          <Button variant="contained">
-            Ajouter
-          </Button>
-        </DialogActions>
-      </Dialog>
-    </Box>
+    </Container>
   );
 };
 
-export default QualityChecksForm;
+export default QualityControl;

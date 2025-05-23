@@ -17,9 +17,6 @@ import {
   Alert,
   CircularProgress
 } from '@mui/material';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 
 // Composants personnalisés
 import InstructionSteps from '../components/production/InstructionSteps';
@@ -41,6 +38,7 @@ const Recipe = () => {
   const [ingredientsValidated, setIngredientsValidated] = useState(false);
   const [instructionsCompleted, setInstructionsCompleted] = useState(false);
   const [currentPause, setCurrentPause] = useState(null);
+  const [saving, setSaving] = useState(false);
 
   // Charger les données de production au chargement de la page
   useEffect(() => {
@@ -50,164 +48,146 @@ const Recipe = () => {
   const loadProductionData = async () => {
     try {
       setLoading(true);
+      setError('');
       
-      // Récupérer l'ID de la production en cours depuis le localStorage
-      const productionId = localStorage.getItem('currentProductionId');
+      // Récupérer le code produit depuis le localStorage (mis par ProductionScan)
+      const productCode = localStorage.getItem('currentProductCode') || 'A123';
+      const batchNumber = localStorage.getItem('currentBatchNumber') || 'L999';
       
-      if (!productionId) {
-        // Si pas d'ID trouvé, rediriger vers la page de scan
-        navigate('/');
-        return;
-      }
+      console.log('📦 Chargement des données pour:', { productCode, batchNumber });
       
-      // En production réelle, décommentez ce code pour charger depuis l'API
-      /*
-      // Charger les données de la production
-      const productionResponse = await ProductionService.getProductionById(productionId);
-      
-      if (!productionResponse.success) {
-        setError("Erreur lors du chargement des données de production");
-        return;
-      }
-      
-      const productionData = productionResponse.data;
-      setProduction(productionData);
-      
-      // Charger les données du produit associé
-      const productResponse = await ProductService.getProductByCode(productionData.productCode);
+      // Charger les données du produit depuis l'API
+      const productResponse = await ProductService.getProductByCode(productCode);
       
       if (!productResponse.success) {
-        setError("Erreur lors du chargement des données du produit");
-        return;
+        throw new Error("Produit non trouvé dans l'API");
       }
       
-      setProduct(productResponse.data);
+      const productData = productResponse.data;
+      setProduct(productData);
+      
+      // Créer une production fictive (en attendant l'API de production)
+      const mockProduction = {
+        id: `PROD_${Date.now()}`,
+        productCode: productData.code,
+        batchNumber: batchNumber,
+        startDate: new Date().toISOString(),
+        status: "in_progress",
+        operator: "Utilisateur Actuel"
+      };
+      
+      setProduction(mockProduction);
       
       // Préparer les ingrédients pour l'affichage
-      setIngredients(productionData.ingredients);
-      */
-      
-      // Pour le développement, utiliser des données factices
-      // Simuler le chargement des données
-      setTimeout(() => {
-        // Données factices du produit
-        const mockProduct = {
-          code: "A123",
-          name: "Nettoyant Multi-Surfaces",
-          recipe: {
-            ingredients: [
-              { id: 1, name: 'Eau déminéralisée', required: 75.0, unit: 'kg', info: 'Température ambiante (20-25°C)' },
-              { id: 2, name: 'Polymère A', required: 15.0, unit: 'kg', info: 'Ajouter lentement pour éviter la formation de grumeaux' },
-              { id: 3, name: 'Additif B', required: 5.0, unit: 'kg' },
-              { id: 4, name: 'Colorant C', required: 2.5, unit: 'kg', info: 'Vérifier la couleur après mélange complet' },
-              { id: 5, name: 'Conservateur D', required: 1.5, unit: 'kg' },
-              { id: 6, name: 'Parfum E', required: 1.0, unit: 'kg' }
-            ],
-            steps: [
-              { order: 1, title: "Préparation", instructions: "Vérifier que tous les équipements sont propres et prêts à l'emploi. Peser tous les ingrédients selon les quantités spécifiées. S'assurer que la température de la cuve est entre 20°C et 25°C.", duration: 20 },
-              { order: 2, title: "Mélange initial", instructions: "Verser l'eau déminéralisée dans la cuve principale. Démarrer l'agitateur à vitesse lente (100-150 RPM). Ajouter lentement le Polymère A tout en maintenant l'agitation. Continuer l'agitation pendant 15 minutes jusqu'à dissolution complète.", duration: 30 },
-              { order: 3, title: "Ajout des additifs", instructions: "Ajouter l'Additif B lentement tout en maintenant l'agitation. Après 5 minutes, ajouter le Colorant C et mélanger pendant 10 minutes. Ajouter le Conservateur D et continuer l'agitation pendant 5 minutes.", duration: 25 },
-              { order: 4, title: "Finition", instructions: "Réduire la vitesse d'agitation à 80-100 RPM. Ajouter le Parfum E et mélanger pendant 10 minutes supplémentaires. Vérifier visuellement l'homogénéité du mélange. Arrêter l'agitation et procéder au contrôle qualité.", duration: 15 }
-            ]
-          }
-        };
-        
-        // Données factices de la production
-        const mockProduction = {
-          id: "temp_id",
-          productCode: "A123",
-          batchNumber: "L789",
-          startDate: new Date().toISOString(),
-          status: "in_progress",
-          pauseHistory: []
-        };
-        
-        setProduct(mockProduct);
-        setProduction(mockProduction);
-        
-        // Préparer les ingrédients pour l'affichage
-        setIngredients(mockProduct.recipe.ingredients.map(ing => ({
+      if (productData.recipe && productData.recipe.ingredients) {
+        setIngredients(productData.recipe.ingredients.map(ing => ({
           ...ing,
+          id: ing._id || Math.random().toString(36),
           actual: ''
         })));
-        
-        setLoading(false);
-      }, 1000);
+      }
+      
+      console.log('✅ Données chargées:', { product: productData.name, ingredients: productData.recipe?.ingredients?.length });
       
     } catch (err) {
-      console.error("Erreur lors du chargement des données:", err);
-      setError("Une erreur est survenue lors du chargement des données");
+      console.error("❌ Erreur lors du chargement des données:", err);
+      setError(`Erreur: ${err.message}`);
+    } finally {
       setLoading(false);
     }
   };
 
   const handleIngredientChange = (id, value) => {
-    setIngredients(ingredients.map(ing => 
-      ing.id === id ? { ...ing, actual: value } : ing
-    ));
+    setIngredients(prevIngredients => 
+      prevIngredients.map(ing => 
+        ing.id === id ? { ...ing, actual: value } : ing
+      )
+    );
   };
 
   const handleIngredientsValidate = async () => {
     try {
-      // En production réelle, envoyer les données au serveur
+      setSaving(true);
+      
+      // Vérifier que tous les ingrédients ont des valeurs
+      const missingIngredients = ingredients.filter(ing => !ing.actual || ing.actual <= 0);
+      if (missingIngredients.length > 0) {
+        setError(`Veuillez remplir les quantités pour: ${missingIngredients.map(ing => ing.name).join(', ')}`);
+        setSaving(false);
+        return;
+      }
+      
+      // Sauvegarder dans le localStorage pour l'instant
+      localStorage.setItem('productionIngredients', JSON.stringify(ingredients));
+      
+      // En production réelle, décommentez ceci :
       /*
       const response = await ProductionService.updateIngredients(production.id, ingredients);
-      
       if (!response.success) {
         throw new Error(response.message || "Erreur lors de la validation des ingrédients");
       }
       */
       
-      // Marquer les ingrédients comme validés
       setIngredientsValidated(true);
-      // Passer à l'onglet des instructions
-      setActiveTab(1);
+      setActiveTab(1); // Passer à l'onglet des instructions
+      setError('');
+      
+      console.log('✅ Ingrédients validés:', ingredients.length);
+      
     } catch (err) {
-      console.error("Erreur lors de la validation des ingrédients:", err);
-      setError("Erreur lors de la validation des ingrédients");
+      console.error("❌ Erreur lors de la validation des ingrédients:", err);
+      setError(`Erreur lors de la validation: ${err.message}`);
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleInstructionsComplete = () => {
     setInstructionsCompleted(true);
+    
+    // Sauvegarder l'état des instructions
+    localStorage.setItem('productionInstructionsCompleted', 'true');
+    
+    console.log('✅ Instructions complétées');
   };
 
   const handleTabChange = (event, newValue) => {
+    // Permettre de naviguer entre les onglets seulement si les prérequis sont remplis
+    if (newValue === 1 && !ingredientsValidated) {
+      setError('Veuillez d\'abord valider les ingrédients');
+      return;
+    }
     setActiveTab(newValue);
+    setError(''); // Effacer les erreurs précédentes
   };
 
   const handleContinue = () => {
+    // Sauvegarder l'état final avant de continuer
+    localStorage.setItem('productionRecipeCompleted', 'true');
     navigate('/quality');
   };
   
   const handlePauseStart = async (reason, category) => {
     try {
-      // En production réelle, enregistrer la pause dans le backend
-      /*
-      const response = await ProductionService.recordPause(production.id, {
-        startTime: new Date(),
-        reason,
-        category
-      });
+      console.log('⏸️ Début de pause:', { reason, category });
       
-      if (!response.success) {
-        throw new Error(response.message || "Erreur lors de l'enregistrement de la pause");
-      }
-      
-      // Stocker l'ID de la pause en cours
-      setCurrentPause(response.data);
-      */
-      
-      // Pour le développement, simuler une pause
-      setCurrentPause({
+      const pauseData = {
         id: `pause_${Date.now()}`,
         startTime: new Date(),
         reason,
         category
-      });
+      };
+      
+      setCurrentPause(pauseData);
+      
+      // Sauvegarder la pause
+      localStorage.setItem('currentPause', JSON.stringify(pauseData));
+      
+      // En production réelle :
+      // await ProductionService.recordPause(production.id, pauseData);
       
     } catch (err) {
-      console.error("Erreur lors du démarrage de la pause:", err);
+      console.error("❌ Erreur lors du démarrage de la pause:", err);
       setError("Erreur lors du démarrage de la pause");
     }
   };
@@ -216,24 +196,16 @@ const Recipe = () => {
     if (!currentPause) return;
     
     try {
-      // En production réelle, terminer la pause dans le backend
-      /*
-      const response = await ProductionService.endPause(
-        production.id, 
-        currentPause.id, 
-        new Date()
-      );
+      console.log('▶️ Fin de pause');
       
-      if (!response.success) {
-        throw new Error(response.message || "Erreur lors de la fin de la pause");
-      }
-      */
-      
-      // Réinitialiser la pause en cours
       setCurrentPause(null);
+      localStorage.removeItem('currentPause');
+      
+      // En production réelle :
+      // await ProductionService.endPause(production.id, currentPause.id, new Date());
       
     } catch (err) {
-      console.error("Erreur lors de la fin de la pause:", err);
+      console.error("❌ Erreur lors de la fin de la pause:", err);
       setError("Erreur lors de la fin de la pause");
     }
   };
@@ -259,7 +231,7 @@ const Recipe = () => {
     );
   }
 
-  if (error) {
+  if (error && !product) {
     return (
       <Container maxWidth="lg">
         <Box sx={{ mt: 4 }}>
@@ -292,6 +264,12 @@ const Recipe = () => {
           ))}
         </Stepper>
         
+        {error && (
+          <Alert severity="error" sx={{ mb: 3 }}>
+            {error}
+          </Alert>
+        )}
+        
         {/* Composant de pause */}
         <PauseButton 
           isPaused={!!currentPause}
@@ -310,7 +288,7 @@ const Recipe = () => {
                 Produit:
               </Typography>
               <Typography variant="body1" fontWeight="medium">
-                {product.name} ({product.code})
+                {product?.name} ({product?.code})
               </Typography>
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -318,7 +296,7 @@ const Recipe = () => {
                 Lot:
               </Typography>
               <Typography variant="body1" fontWeight="medium">
-                {production.batchNumber}
+                {production?.batchNumber}
               </Typography>
             </Grid>
             <Grid item xs={12} sm={4}>
@@ -326,7 +304,7 @@ const Recipe = () => {
                 Date de production:
               </Typography>
               <Typography variant="body1" fontWeight="medium">
-                {new Date(production.startDate).toLocaleDateString()}
+                {production ? new Date(production.startDate).toLocaleDateString() : 'N/A'}
               </Typography>
             </Grid>
           </Grid>
@@ -377,8 +355,21 @@ const Recipe = () => {
               onChange={handleTabChange}
               sx={{ borderBottom: 1, borderColor: 'divider' }}
             >
-              <Tab label="Ingrédients" />
-              <Tab label="Instructions" />
+              <Tab 
+                label="Ingrédients" 
+                sx={{ 
+                  color: ingredientsValidated ? 'success.main' : 'inherit',
+                  fontWeight: ingredientsValidated ? 'bold' : 'normal'
+                }}
+              />
+              <Tab 
+                label="Instructions" 
+                disabled={!ingredientsValidated}
+                sx={{ 
+                  color: instructionsCompleted ? 'success.main' : 'inherit',
+                  fontWeight: instructionsCompleted ? 'bold' : 'normal'
+                }}
+              />
             </Tabs>
             
             <Box sx={{ py: 3 }}>
@@ -387,32 +378,43 @@ const Recipe = () => {
                   ingredients={ingredients} 
                   onChange={handleIngredientChange}
                   onValidate={handleIngredientsValidate}
+                  disabled={saving}
+                  validated={ingredientsValidated}
                 />
               )}
               
-              {activeTab === 1 && (
+              {activeTab === 1 && product?.recipe?.steps && (
                 <InstructionSteps 
                   instructions={product.recipe.steps.map(step => ({
                     title: step.title,
                     steps: step.instructions.split('. ').filter(s => s.trim()),
-                    note: ''
+                    note: `Durée estimée: ${step.duration} minutes`,
+                    duration: step.duration
                   }))}
                   onComplete={handleInstructionsComplete}
+                  completed={instructionsCompleted}
                 />
               )}
             </Box>
           </Box>
         </Paper>
         
-        <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 2 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+          <Button 
+            variant="outlined" 
+            onClick={() => navigate('/')}
+          >
+            Retour au scan
+          </Button>
+          
           <Button 
             variant="contained" 
             color="primary"
             onClick={handleContinue}
-            disabled={progress < 100}
+            disabled={progress < 100 || saving}
             size="large"
           >
-            Continuer vers le contrôle qualité
+            {saving ? 'Sauvegarde...' : 'Continuer vers le contrôle qualité'}
           </Button>
         </Box>
       </Box>

@@ -5,22 +5,7 @@ const Product = require('../models/Product');
 // @access  Admin
 exports.getProducts = async (req, res) => {
   try {
-    // Filtrage optionnel
-    const filter = {};
-    if (req.query.category) filter.category = req.query.category;
-    if (req.query.status) filter.status = req.query.status;
-    
-    // Recherche optionnelle
-    if (req.query.search) {
-      const searchRegex = new RegExp(req.query.search, 'i');
-      filter.$or = [
-        { code: searchRegex },
-        { name: searchRegex },
-        { description: searchRegex }
-      ];
-    }
-    
-    const products = await Product.find(filter).sort({ updatedAt: -1 });
+    const products = await Product.find().sort({ createdAt: -1 });
     
     res.status(200).json({
       success: true,
@@ -36,7 +21,7 @@ exports.getProducts = async (req, res) => {
   }
 };
 
-// @desc    Obtenir un produit par son ID
+// @desc    Obtenir un produit par ID
 // @route   GET /api/products/:id
 // @access  Admin
 exports.getProduct = async (req, res) => {
@@ -62,9 +47,6 @@ exports.getProduct = async (req, res) => {
     });
   }
 };
-
-// Alias pour compatibilité
-exports.getProductById = exports.getProduct;
 
 // @desc    Obtenir un produit par son code
 // @route   GET /api/products/code/:code
@@ -105,21 +87,19 @@ exports.createProduct = async (req, res) => {
       data: product
     });
   } catch (error) {
-    // Gestion des erreurs de validation MongoDB
     if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
+      const errors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Erreur de validation',
-        errors: messages
+        message: 'Données invalides',
+        errors
       });
     }
     
-    // Gestion de l'erreur de duplicate key (code produit unique)
     if (error.code === 11000) {
       return res.status(400).json({
         success: false,
-        message: 'Ce code produit existe déjà'
+        message: 'Un produit avec ce code existe déjà'
       });
     }
     
@@ -136,7 +116,14 @@ exports.createProduct = async (req, res) => {
 // @access  Admin
 exports.updateProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      req.body,
+      { 
+        new: true, 
+        runValidators: true 
+      }
+    );
     
     if (!product) {
       return res.status(404).json({
@@ -145,30 +132,24 @@ exports.updateProduct = async (req, res) => {
       });
     }
     
-    // Si la recette est modifiée, incrémentez la version
-    if (req.body.recipe) {
-      req.body.recipe.version = product.recipe.version + 1;
-      req.body.recipe.lastUpdated = Date.now();
-    }
-    
-    const updatedProduct = await Product.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
-    
     res.status(200).json({
       success: true,
-      data: updatedProduct
+      data: product
     });
   } catch (error) {
-    // Gestion des erreurs de validation
     if (error.name === 'ValidationError') {
-      const messages = Object.values(error.errors).map(val => val.message);
+      const errors = Object.values(error.errors).map(err => err.message);
       return res.status(400).json({
         success: false,
-        message: 'Erreur de validation',
-        errors: messages
+        message: 'Données invalides',
+        errors
+      });
+    }
+    
+    if (error.code === 11000) {
+      return res.status(400).json({
+        success: false,
+        message: 'Un produit avec ce code existe déjà'
       });
     }
     
@@ -185,7 +166,7 @@ exports.updateProduct = async (req, res) => {
 // @access  Admin
 exports.deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id);
+    const product = await Product.findByIdAndDelete(req.params.id);
     
     if (!product) {
       return res.status(404).json({
@@ -194,11 +175,9 @@ exports.deleteProduct = async (req, res) => {
       });
     }
     
-    await product.deleteOne();
-    
     res.status(200).json({
       success: true,
-      data: {}
+      message: 'Produit supprimé avec succès'
     });
   } catch (error) {
     res.status(500).json({
@@ -209,17 +188,17 @@ exports.deleteProduct = async (req, res) => {
   }
 };
 
-// @desc    Changer le statut d'un produit (actif/inactif)
+// @desc    Changer le statut d'un produit
 // @route   PATCH /api/products/:id/status
 // @access  Admin
 exports.updateProductStatus = async (req, res) => {
   try {
     const { status } = req.body;
     
-    if (!status || !['active', 'inactive'].includes(status)) {
+    if (!['active', 'inactive'].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Status invalide'
+        message: 'Statut invalide. Doit être "active" ou "inactive"'
       });
     }
     

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Table,
   TableBody,
@@ -12,164 +12,151 @@ import {
   Box,
   Tooltip,
   IconButton,
-  Alert,
-  Paper,
-  Chip
+  Chip,
+  Alert
 } from '@mui/material';
 import InfoIcon from '@mui/icons-material/Info';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import WarningAmberIcon from '@mui/icons-material/WarningAmber';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
 
-const IngredientsTable = ({ ingredients, onChange, onValidate }) => {
-  const [validated, setValidated] = useState(false);
-  
-  // Calculer le statut de chaque ingrédient
+const IngredientsTable = ({ ingredients, onChange, onValidate, disabled = false, validated = false }) => {
+  // Calculer l'état de chaque ingrédient
   const getIngredientStatus = (ingredient) => {
-    if (!ingredient.actual || ingredient.actual === '') {
-      return { status: 'pending', color: 'default', message: 'En attente' };
+    if (!ingredient.actual || ingredient.actual <= 0) {
+      return { status: 'empty', color: 'default', message: 'À remplir' };
     }
     
-    const deviation = Math.abs((ingredient.actual - ingredient.required) / ingredient.required) * 100;
+    const deviation = ((ingredient.actual - ingredient.quantity) / ingredient.quantity) * 100;
     
-    if (deviation <= 2) {
-      return { status: 'good', color: 'success', message: 'Conforme' };
-    } else if (deviation <= 5) {
-      return { status: 'warning', color: 'warning', message: 'Acceptable' };
+    if (Math.abs(deviation) <= 5) {
+      return { status: 'good', color: 'success', message: `${deviation > 0 ? '+' : ''}${deviation.toFixed(1)}%` };
+    } else if (Math.abs(deviation) <= 10) {
+      return { status: 'warning', color: 'warning', message: `${deviation > 0 ? '+' : ''}${deviation.toFixed(1)}%` };
     } else {
-      return { status: 'error', color: 'error', message: 'Hors spécification' };
+      return { status: 'error', color: 'error', message: `${deviation > 0 ? '+' : ''}${deviation.toFixed(1)}%` };
     }
   };
-  
-  // Vérifier si tous les ingrédients sont remplis
+
   const isAllFilled = ingredients.every(ing => ing.actual && ing.actual > 0);
-  
-  // Vérifier s'il y a des erreurs critiques
-  const hasErrors = ingredients.some(ing => {
-    if (!ing.actual) return false;
-    const deviation = Math.abs((ing.actual - ing.required) / ing.required) * 100;
-    return deviation > 5;
+  const hasWarnings = ingredients.some(ing => {
+    const status = getIngredientStatus(ing);
+    return status.status === 'warning' || status.status === 'error';
   });
 
-  const handleValidate = () => {
-    if (hasErrors) {
-      // Demander confirmation pour les ingrédients hors spécification
-      const confirm = window.confirm(
-        'Certains ingrédients sont hors spécification. Voulez-vous continuer quand même ?'
-      );
-      if (!confirm) return;
-    }
-    
-    setValidated(true);
-    onValidate();
-  };
-
-  const handleIngredientChange = (id, value) => {
-    setValidated(false);
-    onChange(id, value);
-  };
+  const filledCount = ingredients.filter(ing => ing.actual && ing.actual > 0).length;
 
   return (
     <Box>
-      <Typography variant="h6" gutterBottom>
-        Ingrédients requis
-      </Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+        <Typography variant="h6">
+          Ingrédients requis
+        </Typography>
+        <Chip 
+          label={`${filledCount}/${ingredients.length} complétés`}
+          color={isAllFilled ? 'success' : 'default'}
+          variant={isAllFilled ? 'filled' : 'outlined'}
+        />
+      </Box>
+
+      {validated && (
+        <Alert severity="success" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            ✅ Ingrédients validés et sauvegardés
+          </Typography>
+        </Alert>
+      )}
+
+      {hasWarnings && !validated && (
+        <Alert severity="warning" sx={{ mb: 2 }}>
+          <Typography variant="body2">
+            ⚠️ Certains ingrédients ont des écarts importants par rapport aux quantités requises
+          </Typography>
+        </Alert>
+      )}
       
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Entrez les quantités réelles utilisées pour chaque ingrédient. 
-        Les écarts de plus de 5% seront signalés.
-      </Typography>
-      
-      <TableContainer component={Paper} elevation={1}>
+      <TableContainer>
         <Table>
           <TableHead>
-            <TableRow sx={{ backgroundColor: 'grey.100' }}>
-              <TableCell><strong>Ingrédient</strong></TableCell>
-              <TableCell align="right"><strong>Quantité requise</strong></TableCell>
-              <TableCell align="right"><strong>Quantité réelle</strong></TableCell>
-              <TableCell align="right"><strong>Unité</strong></TableCell>
-              <TableCell align="center"><strong>Écart</strong></TableCell>
-              <TableCell align="center"><strong>Statut</strong></TableCell>
-              <TableCell align="center"><strong>Info</strong></TableCell>
+            <TableRow>
+              <TableCell>Ingrédient</TableCell>
+              <TableCell align="right">Quantité requise</TableCell>
+              <TableCell align="right">Quantité réelle</TableCell>
+              <TableCell align="right">Unité</TableCell>
+              <TableCell align="center">Écart</TableCell>
+              <TableCell align="center">Info</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
             {ingredients.map((ingredient) => {
               const status = getIngredientStatus(ingredient);
-              const deviation = ingredient.actual ? 
-                ((ingredient.actual - ingredient.required) / ingredient.required) * 100 : 0;
-              
               return (
                 <TableRow 
                   key={ingredient.id}
                   sx={{ 
-                    '&:nth-of-type(odd)': { backgroundColor: 'grey.50' },
-                    borderLeft: `4px solid ${
-                      status.status === 'good' ? '#4caf50' : 
-                      status.status === 'warning' ? '#ff9800' : 
-                      status.status === 'error' ? '#f44336' : 'transparent'
-                    }`
+                    backgroundColor: validated ? 'success.light' : 'inherit',
+                    opacity: validated ? 0.8 : 1
                   }}
                 >
                   <TableCell>
-                    <Typography variant="body2" fontWeight="medium">
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
                       {ingredient.name}
-                    </Typography>
+                      {validated && (
+                        <CheckCircleIcon 
+                          color="success" 
+                          fontSize="small" 
+                          sx={{ ml: 1 }} 
+                        />
+                      )}
+                    </Box>
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2">
-                      {ingredient.required}
+                    <Typography fontWeight="medium">
+                      {ingredient.quantity}
                     </Typography>
                   </TableCell>
                   <TableCell align="right">
                     <TextField
                       type="number"
                       value={ingredient.actual || ''}
-                      onChange={(e) => handleIngredientChange(ingredient.id, parseFloat(e.target.value) || '')}
+                      onChange={(e) => onChange(ingredient.id, parseFloat(e.target.value) || '')}
                       size="small"
+                      disabled={disabled || validated}
                       inputProps={{ 
                         min: 0, 
                         step: 0.1,
                         style: { textAlign: 'right' }
                       }}
-                      sx={{ width: 100 }}
-                      disabled={validated}
+                      sx={{ 
+                        width: 120,
+                        '& input': {
+                          fontWeight: ingredient.actual ? 'medium' : 'normal'
+                        }
+                      }}
+                      error={status.status === 'error'}
                     />
                   </TableCell>
                   <TableCell align="right">
-                    <Typography variant="body2">
+                    <Typography variant="body2" color="text.secondary">
                       {ingredient.unit}
                     </Typography>
                   </TableCell>
                   <TableCell align="center">
-                    {ingredient.actual ? (
-                      <Typography 
-                        variant="body2" 
-                        color={deviation > 0 ? 'error.main' : 'success.main'}
-                        fontWeight="medium"
-                      >
-                        {deviation > 0 ? '+' : ''}{deviation.toFixed(1)}%
-                      </Typography>
-                    ) : (
-                      <Typography variant="body2" color="text.secondary">
-                        -
-                      </Typography>
+                    {ingredient.actual && ingredient.actual > 0 && (
+                      <Chip
+                        label={status.message}
+                        color={status.color}
+                        size="small"
+                        variant="outlined"
+                        icon={
+                          status.status === 'error' ? <WarningIcon /> :
+                          status.status === 'good' ? <CheckCircleIcon /> : undefined
+                        }
+                      />
                     )}
                   </TableCell>
                   <TableCell align="center">
-                    <Chip
-                      label={status.message}
-                      color={status.color}
-                      size="small"
-                      icon={
-                        status.status === 'good' ? <CheckCircleOutlineIcon /> :
-                        status.status === 'warning' ? <WarningAmberIcon /> :
-                        status.status === 'error' ? <WarningAmberIcon /> : undefined
-                      }
-                    />
-                  </TableCell>
-                  <TableCell align="center">
-                    {ingredient.info && (
-                      <Tooltip title={ingredient.info} arrow>
+                    {ingredient.notes && (
+                      <Tooltip title={ingredient.notes} arrow>
                         <IconButton size="small">
                           <InfoIcon fontSize="small" />
                         </IconButton>
@@ -183,37 +170,33 @@ const IngredientsTable = ({ ingredients, onChange, onValidate }) => {
         </Table>
       </TableContainer>
       
-      {hasErrors && !validated && (
-        <Alert severity="warning" sx={{ mt: 2 }}>
-          <Typography variant="body2">
-            <strong>Attention :</strong> Certains ingrédients présentent un écart supérieur à 5%. 
-            Vérifiez les quantités avant de valider.
-          </Typography>
-        </Alert>
-      )}
-      
-      {validated && (
-        <Alert severity="success" sx={{ mt: 2 }}>
-          <Typography variant="body2">
-            <strong>Ingrédients validés :</strong> Vous pouvez maintenant passer aux instructions de production.
-          </Typography>
-        </Alert>
-      )}
-      
       <Box sx={{ mt: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="body2" color="text.secondary">
-          {ingredients.filter(ing => ing.actual && ing.actual > 0).length} / {ingredients.length} ingrédients renseignés
-        </Typography>
+        <Box>
+          <Typography variant="body2" color="text.secondary">
+            💡 Écarts acceptables: ±5% (vert), ±10% (orange), +10% (rouge)
+          </Typography>
+        </Box>
         
         <Button
           variant="contained"
-          onClick={handleValidate}
-          disabled={!isAllFilled || validated}
-          startIcon={validated ? <CheckCircleOutlineIcon /> : undefined}
+          onClick={onValidate}
+          disabled={!isAllFilled || disabled || validated}
+          size="large"
+          startIcon={validated ? <CheckCircleIcon /> : undefined}
         >
-          {validated ? 'Ingrédients validés' : 'Valider les ingrédients'}
+          {validated ? 'Ingrédients validés' : 
+           disabled ? 'Validation en cours...' : 
+           'Valider les ingrédients'}
         </Button>
       </Box>
+
+      {!isAllFilled && !validated && (
+        <Box sx={{ mt: 2 }}>
+          <Typography variant="body2" color="text.secondary">
+            📋 Ingrédients restants à remplir: {ingredients.length - filledCount}
+          </Typography>
+        </Box>
+      )}
     </Box>
   );
 };
