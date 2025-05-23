@@ -1,11 +1,12 @@
 const express = require('express');
 const { 
   getProducts, 
-  getProductById, 
+  getProduct, // Changé de getProductById
   createProduct, 
   updateProduct, 
   deleteProduct,
-  getProductByCode
+  getProductByCode,
+  updateProductStatus
 } = require('../controllers/productController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -17,9 +18,13 @@ router.route('/')
   .post(protect, authorize('admin'), createProduct);
 
 router.route('/:id')
-  .get(protect, authorize('admin'), getProductById)
+  .get(protect, authorize('admin'), getProduct)
   .put(protect, authorize('admin'), updateProduct)
   .delete(protect, authorize('admin'), deleteProduct);
+
+// Route pour changer le statut
+router.route('/:id/status')
+  .patch(protect, authorize('admin'), updateProductStatus);
 
 // Route pour obtenir un produit par code (accessible par les opérateurs)
 router.route('/code/:code')
