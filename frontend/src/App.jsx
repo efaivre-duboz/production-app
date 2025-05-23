@@ -29,19 +29,15 @@ function AppContent() {
         {/* Route publique */}
         <Route path="/login" element={<Login />} />
         
-        {/* Routes protégées pour tous les utilisateurs */}
+        {/* Routes protégées pour tous les utilisateurs authentifiés */}
         <Route element={<RoleBasedRoute allowedRoles={[]} />}>
           <Route element={<Layout />}>
             <Route index element={<ProductionScan />} />
             <Route path="recipe" element={<Recipe />} />
             <Route path="quality" element={<QualityControl />} />
             <Route path="end" element={<ProductionEnd />} />
-          </Route>
-        </Route>
-        
-        {/* Routes protégées pour les administrateurs uniquement */}
-        <Route element={<RoleBasedRoute allowedRoles={['admin']} />}>
-          <Route element={<Layout />}>
+            
+            {/* Routes admin accessibles aussi aux utilisateurs normaux en développement */}
             <Route path="history" element={<ProductionHistory />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="product-management" element={<ProductManagement />} />
