@@ -76,7 +76,7 @@ const QualityResultSchema = new mongoose.Schema({
 
 // Schéma principal de production
 const ProductionSchema = new mongoose.Schema({
-  productId: {
+  product: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Product',
     required: [true, 'L\'ID du produit est requis']
