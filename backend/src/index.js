@@ -33,22 +33,36 @@ app.get('/', (req, res) => {
   res.json({ message: 'API fonctionnelle' });
 });
 
-// Connexion à MongoDB
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log('Connexion à MongoDB établie avec succès');
-    // Démarrer le serveur après la connexion à la DB
-    app.listen(PORT, () => {
-      console.log(`Serveur en cours d'exécution sur le port ${PORT}`);
-    });
-  })
-  .catch((err) => {
-    console.error('Erreur lors de la connexion à MongoDB:', err.message);
-    process.exit(1);
+// Fonction pour démarrer le serveur
+const startServer = () => {
+  app.listen(PORT, () => {
+    console.log(`Serveur en cours d'exécution sur le port ${PORT}`);
+    console.log(`API accessible sur http://localhost:${PORT}`);
   });
+};
+
+// Connexion à MongoDB (avec fallback en cas d'échec)
+if (process.env.MONGO_URI) {
+  mongoose.connect(process.env.MONGO_URI)
+    .then(() => {
+      console.log('Connexion à MongoDB établie avec succès');
+      startServer();
+    })
+    .catch((err) => {
+      console.error('Erreur lors de la connexion à MongoDB:', err.message);
+      console.log('Démarrage du serveur sans MongoDB (mode développement)');
+      startServer();
+    });
+} else {
+  console.log('MONGO_URI non défini - Démarrage en mode développement sans MongoDB');
+  startServer();
+}
 
 // Gestion des erreurs non interceptées
 process.on('unhandledRejection', (err) => {
-  console.log('ERREUR NON GÉRÉE:', err);
-  process.exit(1);
+  console.log('ERREUR NON GÉRÉE:', err.message);
+  // Ne pas arrêter le serveur en mode développement
+  if (process.env.NODE_ENV === 'production') {
+    process.exit(1);
+  }
 });

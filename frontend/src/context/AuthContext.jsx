@@ -13,25 +13,36 @@ export const AuthProvider = ({ children }) => {
   // Vérifier si l'utilisateur est déjà connecté au chargement
   useEffect(() => {
     const checkAuth = async () => {
-      if (AuthService.isAuthenticated()) {
-        try {
-          // Si en mode bypass, créer un utilisateur fictif
-          if (localStorage.getItem('authBypass') === 'true') {
-            setCurrentUser({
-              name: 'Utilisateur Test',
-              role: localStorage.getItem('userRole') || 'user'
-            });
-          } else {
-            // Sinon, essayer de récupérer le profil de l'utilisateur
+      try {
+        // Vérifier d'abord le mode bypass (développement)
+        if (localStorage.getItem('authBypass') === 'true') {
+          setCurrentUser({
+            name: 'Utilisateur Test',
+            role: localStorage.getItem('userRole') || 'user'
+          });
+          setLoading(false);
+          return;
+        }
+
+        // Vérifier s'il y a un token
+        const token = localStorage.getItem('token');
+        if (token) {
+          try {
             const response = await AuthService.getProfile();
             setCurrentUser(response.user);
+          } catch (err) {
+            console.error('Token invalide:', err);
+            // Nettoyer le token invalide
+            localStorage.removeItem('token');
+            setCurrentUser(null);
           }
-        } catch (err) {
-          console.error('Erreur de session:', err);
-          AuthService.logout();
         }
+      } catch (err) {
+        console.error('Erreur lors de la vérification de l\'authentification:', err);
+        setCurrentUser(null);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     checkAuth();
@@ -41,7 +52,7 @@ export const AuthProvider = ({ children }) => {
   const login = async (username, password) => {
     try {
       setError(null);
-      console.log('Tentative de connexion avec:', { username, password });
+      setLoading(true);
       
       const response = await AuthService.login(username, password);
       setCurrentUser(response.user);
@@ -49,21 +60,13 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       console.error('Erreur de connexion:', error);
       
-      // Afficher plus de détails sur l'erreur
-      if (error.response) {
-        console.log('Données de réponse d\'erreur:', error.response.data);
-        console.log('Statut de réponse d\'erreur:', error.response.status);
-      } else if (error.request) {
-        console.log('Requête sans réponse:', error.request);
-      } else {
-        console.log('Erreur de configuration:', error.message);
-      }
-      
       setError(
         error.response?.data?.message || 
         'Une erreur est survenue lors de la connexion'
       );
       return false;
+    } finally {
+      setLoading(false);
     }
   };
 

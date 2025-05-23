@@ -1,7 +1,8 @@
+// backend/routes/productRoutes.js
 const express = require('express');
 const { 
   getProducts, 
-  getProduct, // Changé de getProductById
+  getProduct, 
   createProduct, 
   updateProduct, 
   deleteProduct,
