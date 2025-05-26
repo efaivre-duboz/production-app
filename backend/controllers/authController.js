@@ -15,6 +15,14 @@ exports.register = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
+    // Validation basique
+    if (!name || !email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Veuillez fournir nom, email et mot de passe'
+      });
+    }
+
     // Vérifier si l'utilisateur existe déjà
     const userExists = await User.findOne({ email });
     if (userExists) {
@@ -44,6 +52,7 @@ exports.register = async (req, res) => {
       });
     }
   } catch (error) {
+    console.error('Erreur register:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de l\'inscription',
@@ -57,18 +66,27 @@ exports.register = async (req, res) => {
 // @access  Public
 exports.login = async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { name, email, password } = req.body;
 
-    // Vérifier si l'email et le mot de passe sont fournis
-    if (!email || !password) {
+    // Accepter soit name soit email
+    const loginField = email || name;
+    
+    // Vérifier si les champs sont fournis
+    if (!loginField || !password) {
       return res.status(400).json({
         success: false,
-        message: 'Veuillez fournir un email et un mot de passe'
+        message: 'Veuillez fournir un identifiant et un mot de passe'
       });
     }
 
-    // Vérifier si l'utilisateur existe
-    const user = await User.findOne({ email }).select('+password');
+    // Chercher l'utilisateur par email ou nom
+    const user = await User.findOne({
+      $or: [
+        { email: loginField },
+        { name: loginField }
+      ]
+    }).select('+password');
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -96,6 +114,7 @@ exports.login = async (req, res) => {
       token: generateToken(user._id)
     });
   } catch (error) {
+    console.error('Erreur login:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la connexion',
@@ -121,6 +140,7 @@ exports.getMe = async (req, res) => {
       }
     });
   } catch (error) {
+    console.error('Erreur getMe:', error);
     res.status(500).json({
       success: false,
       message: 'Erreur lors de la récupération du profil',
