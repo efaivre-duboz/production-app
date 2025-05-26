@@ -133,9 +133,9 @@ const ProductionEnd = () => {
     const theoreticalYield = totalRequiredWeight;
     const actualQuantity = parseFloat(formData.finalQuantity) || 0;
     const wastage = parseFloat(formData.wastageQuantity) || 0;
-    const yield = actualQuantity + wastage;
-    const yieldPercentage = theoreticalYield > 0 ? ((yield / theoreticalYield) * 100) : 0;
-    const wastePercentage = yield > 0 ? ((wastage / yield) * 100) : 0;
+    const totalYield = actualQuantity + wastage; // Changed from 'yield' to 'totalYield'
+    const yieldPercentage = theoreticalYield > 0 ? ((totalYield / theoreticalYield) * 100) : 0;
+    const wastePercentage = totalYield > 0 ? ((wastage / totalYield) * 100) : 0;
     
     return {
       productInfo: {
@@ -166,7 +166,7 @@ const ProductionEnd = () => {
         theoretical: theoreticalYield,
         actual: actualQuantity,
         wastage: wastage,
-        total: yield,
+        total: totalYield, // Changed from 'yield' to 'totalYield'
         yieldPercentage: yieldPercentage,
         wastePercentage: wastePercentage
       }
@@ -268,3 +268,262 @@ const ProductionEnd = () => {
               <StepLabel>{label}</StepLabel>
             </Step>
           ))}
+        </Stepper>
+
+        {!formSubmitted ? (
+          <Paper sx={{ p: 4, mb: 4 }}>
+            <Typography variant="h6" gutterBottom>
+              Informations finales de production
+            </Typography>
+            
+            <Box component="form" onSubmit={handleSubmit}>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Quantité finale produite (kg)"
+                    name="finalQuantity"
+                    type="number"
+                    value={formData.finalQuantity}
+                    onChange={handleChange}
+                    required
+                    inputProps={{ step: "0.1", min: "0" }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <TextField
+                    fullWidth
+                    label="Quantité de déchets (kg)"
+                    name="wastageQuantity"
+                    type="number"
+                    value={formData.wastageQuantity}
+                    onChange={handleChange}
+                    inputProps={{ step: "0.1", min: "0" }}
+                  />
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <TextField
+                    fullWidth
+                    label="Notes de production"
+                    name="productionNotes"
+                    multiline
+                    rows={4}
+                    value={formData.productionNotes}
+                    onChange={handleChange}
+                    placeholder="Commentaires, observations, incidents..."
+                  />
+                </Grid>
+                
+                <Grid item xs={12}>
+                  <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end' }}>
+                    <Button
+                      variant="outlined"
+                      onClick={() => navigate('/quality-control')}
+                    >
+                      Retour
+                    </Button>
+                    <Button
+                      type="submit"
+                      variant="contained"
+                      size="large"
+                      startIcon={<TaskAltIcon />}
+                    >
+                      Terminer la production
+                    </Button>
+                  </Box>
+                </Grid>
+              </Grid>
+            </Box>
+          </Paper>
+        ) : (
+          <Box>
+            <Alert severity="success" sx={{ mb: 4 }}>
+              <Typography variant="h6">Production terminée avec succès !</Typography>
+              <Typography>
+                La production du lot {production?.batchNumber} est maintenant terminée.
+              </Typography>
+            </Alert>
+            
+            <Grid container spacing={3}>
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Actions disponibles
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <Button
+                        variant="contained"
+                        startIcon={<HomeIcon />}
+                        onClick={handleNewProduction}
+                        fullWidth
+                      >
+                        Nouvelle production
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<DownloadIcon />}
+                        onClick={handleShowSummary}
+                        fullWidth
+                      >
+                        Voir le rapport
+                      </Button>
+                      <Button
+                        variant="outlined"
+                        startIcon={<PrintIcon />}
+                        onClick={handlePrintReport}
+                        fullWidth
+                      >
+                        Imprimer le rapport
+                      </Button>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+              
+              <Grid item xs={12} md={6}>
+                <Card>
+                  <CardContent>
+                    <Typography variant="h6" gutterBottom>
+                      Résumé rapide
+                    </Typography>
+                    {productionSummary && (
+                      <Box>
+                        <Typography variant="body2">
+                          <strong>Produit:</strong> {productionSummary.productInfo.name}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Lot:</strong> {productionSummary.productInfo.batch}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Durée:</strong> {productionSummary.timing.durationFormatted}
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Rendement:</strong> {productionSummary.yield.yieldPercentage.toFixed(1)}%
+                        </Typography>
+                        <Typography variant="body2">
+                          <strong>Qualité:</strong> {productionSummary.quality.conformePercentage.toFixed(1)}% conforme
+                        </Typography>
+                      </Box>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+          </Box>
+        )}
+
+        {/* Dialog pour afficher le rapport complet */}
+        <Dialog 
+          open={showSummary} 
+          onClose={() => setShowSummary(false)}
+          maxWidth="lg"
+          fullWidth
+        >
+          <DialogTitle>Rapport de production complet</DialogTitle>
+          <DialogContent>
+            {productionSummary && (
+              <Box sx={{ mt: 2 }}>
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h6" gutterBottom>Informations générales</Typography>
+                    <Table size="small">
+                      <TableBody>
+                        <TableRow>
+                          <TableCell><strong>Produit</strong></TableCell>
+                          <TableCell>{productionSummary.productInfo.name}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Code</strong></TableCell>
+                          <TableCell>{productionSummary.productInfo.code}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Lot</strong></TableCell>
+                          <TableCell>{productionSummary.productInfo.batch}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Opérateur</strong></TableCell>
+                          <TableCell>{productionSummary.productInfo.operator}</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Durée</strong></TableCell>
+                          <TableCell>{productionSummary.timing.durationFormatted}</TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </Grid>
+                  
+                  <Grid item xs={12} md={6}>
+                    <Typography variant="h6" gutterBottom>Rendement</Typography>
+                    <Table size="small">
+                      <TableBody>
+                        <TableRow>
+                          <TableCell><strong>Rendement théorique</strong></TableCell>
+                          <TableCell>{productionSummary.yield.theoretical.toFixed(2)} kg</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Quantité produite</strong></TableCell>
+                          <TableCell>{productionSummary.yield.actual.toFixed(2)} kg</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Déchets</strong></TableCell>
+                          <TableCell>{productionSummary.yield.wastage.toFixed(2)} kg</TableCell>
+                        </TableRow>
+                        <TableRow>
+                          <TableCell><strong>Rendement total</strong></TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={`${productionSummary.yield.yieldPercentage.toFixed(1)}%`}
+                              color={productionSummary.yield.yieldPercentage >= 90 ? 'success' : 'warning'}
+                              size="small"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </Grid>
+                  
+                  <Grid item xs={12}>
+                    <Typography variant="h6" gutterBottom>Contrôle qualité</Typography>
+                    <Table size="small">
+                      <TableHead>
+                        <TableRow>
+                          <TableCell><strong>Total contrôles</strong></TableCell>
+                          <TableCell><strong>Conformes</strong></TableCell>
+                          <TableCell><strong>Non conformes</strong></TableCell>
+                          <TableCell><strong>Taux de conformité</strong></TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        <TableRow>
+                          <TableCell>{productionSummary.quality.totalChecks}</TableCell>
+                          <TableCell>{productionSummary.quality.conforme}</TableCell>
+                          <TableCell>{productionSummary.quality.nonConforme}</TableCell>
+                          <TableCell>
+                            <Chip 
+                              label={`${productionSummary.quality.conformePercentage.toFixed(1)}%`}
+                              color={productionSummary.quality.conformePercentage >= 95 ? 'success' : 'warning'}
+                              size="small"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      </TableBody>
+                    </Table>
+                  </Grid>
+                </Grid>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setShowSummary(false)}>Fermer</Button>
+            <Button onClick={handlePrintReport} variant="contained">Imprimer</Button>
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </Container>
+  );
+};
+
+export default ProductionEnd;
